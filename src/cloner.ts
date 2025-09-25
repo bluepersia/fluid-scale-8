@@ -7,7 +7,7 @@ import {
 } from "./cloner.types";
 import { FLUID_PROPERTY_NAMES, SHORTHAND_PROPERTIES } from "./const";
 
-function cloneDocument(document: Document): DocumentClone {
+let cloneDocument = (document: Document): DocumentClone => {
   const docClone: DocumentClone = {
     styleSheets: cloneStyleSheets(
       getAccessibleStyleSheets(document.styleSheets)
@@ -15,7 +15,7 @@ function cloneDocument(document: Document): DocumentClone {
   };
 
   return docClone;
-}
+};
 
 function getAccessibleStyleSheets(sheets: StyleSheetList): CSSStyleSheet[] {
   return Array.from(sheets).filter((sheet) => {
@@ -28,19 +28,19 @@ function getAccessibleStyleSheets(sheets: StyleSheetList): CSSStyleSheet[] {
   });
 }
 
-function cloneStyleSheets(sheets: CSSStyleSheet[]): StyleSheetClone[] {
+let cloneStyleSheets = (sheets: CSSStyleSheet[]): StyleSheetClone[] => {
   return Array.from(sheets).map(cloneStyleSheet);
-}
+};
 
-function cloneStyleSheet(sheet: CSSStyleSheet): StyleSheetClone {
+let cloneStyleSheet = (sheet: CSSStyleSheet): StyleSheetClone => {
   const styleSheetClone: StyleSheetClone = {
     cssRules: cloneRules(sheet.cssRules),
   };
 
   return styleSheetClone;
-}
+};
 
-function cloneRules(rules: CSSRuleList): RuleClone[] {
+let cloneRules = (rules: CSSRuleList): RuleClone[] => {
   const rulesClone: RuleClone[] = [];
   for (const rule of Array.from(rules)) {
     const ruleClone = cloneRule(rule);
@@ -49,26 +49,27 @@ function cloneRules(rules: CSSRuleList): RuleClone[] {
     }
   }
   return rulesClone;
-}
+};
 
-function cloneRule(rule: CSSRule): RuleClone | null {
+let cloneRule = (rule: CSSRule): RuleClone | null => {
   if (rule.type === 1) {
     return cloneStyleRule(rule as CSSStyleRule);
   } else if (rule.type === 4) {
     return cloneMediaRule(rule as CSSMediaRule);
   }
   return null;
-}
+};
 
-function cloneStyleRule(rule: CSSStyleRule): StyleRuleClone | null {
+let cloneStyleRule = (rule: CSSStyleRule): StyleRuleClone | null => {
   const style: Record<string, string> = {};
 
-  for (const property in rule.style) {
+  for (let i = 0; i < rule.style.length; i++) {
+    const property = rule.style.item(i);
     if (FLUID_PROPERTY_NAMES.has(property)) {
       if (SHORTHAND_PROPERTIES[property]) {
-        if (process === undefined) continue;
+        if (typeof process !== undefined) continue;
       }
-      style[property] = rule.style[property];
+      style[property] = rule.style.getPropertyValue(property);
     }
   }
   if (Object.keys(style).length <= 0) return null;
@@ -77,13 +78,13 @@ function cloneStyleRule(rule: CSSStyleRule): StyleRuleClone | null {
     type: 1,
     selectorText: rule.selectorText,
     style,
-    special: {},
+    specialProps: {},
   };
 
   return styleRuleClone;
-}
+};
 
-function cloneMediaRule(rule: CSSMediaRule): MediaRuleClone | null {
+let cloneMediaRule = (rule: CSSMediaRule): MediaRuleClone | null => {
   // Regex explanation: matches (min-width: <number>px)
   const match = rule.media.mediaText.match(/\(min-width:\s*(\d+)px\)/);
 
@@ -96,6 +97,35 @@ function cloneMediaRule(rule: CSSMediaRule): MediaRuleClone | null {
     return mediaRuleClone;
   }
   return null;
+};
+
+/* -- TEST WRAPPING -- */
+
+function wrap(
+  cloneDocumentWrapped: (document: Document) => DocumentClone,
+  cloneStyleSheetsWrapped: (styleSheets: CSSStyleSheet[]) => StyleSheetClone[],
+  cloneStyleSheetWrapped: (sheet: CSSStyleSheet) => StyleSheetClone,
+  cloneRulesWrapped: (rules: CSSRuleList) => RuleClone[],
+  cloneRuleWrapped: (rule: CSSRule) => RuleClone | null,
+  cloneStyleRuleWrapped: (rule: CSSStyleRule) => StyleRuleClone | null,
+  cloneMediaRuleWrapped: (rule: CSSMediaRule) => MediaRuleClone | null
+) {
+  cloneDocument = cloneDocumentWrapped;
+  cloneStyleSheets = cloneStyleSheetsWrapped;
+  cloneStyleSheet = cloneStyleSheetWrapped;
+  cloneRules = cloneRulesWrapped;
+  cloneRule = cloneRuleWrapped;
+  cloneStyleRule = cloneStyleRuleWrapped;
+  cloneMediaRule = cloneMediaRuleWrapped;
 }
 
-export { cloneDocument };
+export {
+  cloneDocument,
+  cloneStyleSheets,
+  cloneStyleSheet,
+  cloneRules,
+  cloneRule,
+  cloneStyleRule,
+  cloneMediaRule,
+  wrap,
+};

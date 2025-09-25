@@ -14,7 +14,7 @@ type StyleRuleClone = RuleClone & {
   type: 1;
   selectorText: string;
   style: Record<string, string>;
-  special: Record<string, string>;
+  specialProps: Record<string, string>;
 };
 
 type MediaRuleClone = RuleClone & {
