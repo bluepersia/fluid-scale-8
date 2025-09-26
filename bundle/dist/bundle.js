@@ -49,11 +49,11 @@ var FluidScale = (() => {
       this.resetState = () => {
         this._state = { ...this.newState(), funcIndex: 0, master: this.master };
       };
-      this.assertQueue = (masterIndex) => {
+      this.assertQueue = (options) => {
         const { assertionQueue, verifiedAssertions } = assertionQueues[this.globalKey];
         verifiedAssertions.clear();
-        console.groupCollapsed(`\u2705 ${this.globalKey} - \u2728${masterIndex ?? this.state.master.index}`);
-        const queueIndexes = Array.from(assertionQueue.keys()).sort((a, b) => a - b);
+        console.groupCollapsed(`\u2705 ${this.globalKey} - \u2728${options?.masterIndex ?? this.state.master.index}`);
+        const queueIndexes = Array.from(assertionQueue.keys()).sort((a, b) => options?.sorting === "desc" ? a - b : b - a);
         for (const queueIndex of queueIndexes) {
           const { name, result, args, state } = assertionQueue.get(queueIndex);
           const assertions = this.assertionChains[name];
@@ -107,8 +107,6 @@ var FluidScale = (() => {
         };
         if (processors?.post) {
           assertionData.postOp = (state, args2, result2) => {
-            const newState = { ...state };
-            assertionData.state = newState;
             processors.post(state, args2, result2);
           };
         }
@@ -134,6 +132,7 @@ var FluidScale = (() => {
       const queueIndexes = Array.from(assertionQueue.keys()).sort((a, b) => a - b);
       for (const queueIndex of queueIndexes) {
         const value = assertionQueue.get(queueIndex);
+        value.state = { ...value.state };
         if (value.postOp)
           value.postOp(this.state, value.args, value.result);
       }
@@ -247,11 +246,12 @@ var FluidScale = (() => {
     "margin-right",
     "margin-bottom",
     "margin-left",
-    "borderadius",
+    "border-radius",
     "border-top-left-radius",
     "border-top-right-radius",
     "border-bottom-right-radius",
     "border-bottom-left-radius",
+    "gap",
     "column-gap",
     "row-gap",
     "--fluid-bg-size",
@@ -404,6 +404,34 @@ var FluidScale = (() => {
     ])
   };
 
+  // src/utils.ts
+  function splitBySpaces(value) {
+    let depth = 0;
+    let currentValue = "";
+    const result = [];
+    for (const char of value) {
+      if (char === " ") {
+        if (depth === 0) {
+          result.push(currentValue);
+          currentValue = "";
+        } else {
+          currentValue += char;
+        }
+      } else {
+        if (char === "(") {
+          depth++;
+        } else if (char === ")") {
+          depth--;
+        }
+        currentValue += char;
+      }
+    }
+    if (currentValue) {
+      result.push(currentValue);
+    }
+    return result;
+  }
+
   // src/cloner.ts
   var cloneDocument = (document) => {
     const docClone = {
@@ -451,24 +479,35 @@ var FluidScale = (() => {
     return null;
   };
   var cloneStyleRule = (rule) => {
-    const style = {};
-    for (let i = 0; i < rule.style.length; i++) {
-      const property = rule.style.item(i);
-      if (FLUID_PROPERTY_NAMES.has(property)) {
-        if (SHORTHAND_PROPERTIES[property]) {
-          if (typeof process !== void 0) continue;
-        }
-        style[property] = rule.style.getPropertyValue(property);
-      }
-    }
-    if (Object.keys(style).length <= 0) return null;
+    const style = makeStyle(rule);
+    if (!style) return null;
     const styleRuleClone = {
       type: 1,
-      selectorText: rule.selectorText,
+      selectorText: normalizeSelector(rule.selectorText),
       style,
       specialProps: {}
     };
     return styleRuleClone;
+  };
+  var makeStyle = (rule) => {
+    const style = {};
+    for (let i = 0; i < rule.style.length; i++) {
+      const property = rule.style[i];
+      if (FLUID_PROPERTY_NAMES.has(property)) {
+        if (SHORTHAND_PROPERTIES[property]) {
+          if (typeof process === void 0) continue;
+          const shorthandValue = rule.style.getPropertyValue(property);
+          if (!shorthandValue) continue;
+          const shorthandStyle = handleShorthand(property, shorthandValue);
+          for (const key in shorthandStyle) {
+            style[key] = normalizeZero(shorthandStyle[key]);
+          }
+          continue;
+        }
+        style[property] = normalizeZero(rule.style.getPropertyValue(property));
+      }
+    }
+    return Object.keys(style).length <= 0 ? null : style;
   };
   var cloneMediaRule = (rule) => {
     const match = rule.media.mediaText.match(/\(min-width:\s*(\d+)px\)/);
@@ -482,13 +521,38 @@ var FluidScale = (() => {
     }
     return null;
   };
-  function wrap(cloneDocumentWrapped, cloneStyleSheetsWrapped, cloneStyleSheetWrapped, cloneRulesWrapped, cloneRuleWrapped, cloneStyleRuleWrapped, cloneMediaRuleWrapped) {
+  function handleShorthand(property, value) {
+    const splitValues = splitBySpaces(value);
+    const explicitStyle = {};
+    const mapForLength = SHORTHAND_PROPERTIES[property].get(splitValues.length);
+    for (let i = 0; i < splitValues.length; i++) {
+      const properties = mapForLength?.get(i);
+      if (properties) {
+        const value2 = splitValues[i];
+        for (const property2 of properties) {
+          explicitStyle[property2] = value2;
+        }
+      }
+    }
+    return explicitStyle;
+  }
+  function normalizeZero(input) {
+    return input.replace(
+      /(?<![\d.])0+(?:\.0+)?(?![\d.])(?!(px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc)\b)/g,
+      "0px"
+    );
+  }
+  function normalizeSelector(selector) {
+    return selector.replace(/\*::(before|after)\b/g, "::$1").replace(/\s*,\s*/g, ", ").replace(/\s+/g, " ").trim();
+  }
+  function wrap(cloneDocumentWrapped, cloneStyleSheetsWrapped, cloneStyleSheetWrapped, cloneRulesWrapped, cloneRuleWrapped, cloneStyleRuleWrapped, makeStyleWrapped, cloneMediaRuleWrapped) {
     cloneDocument = cloneDocumentWrapped;
     cloneStyleSheets = cloneStyleSheetsWrapped;
     cloneStyleSheet = cloneStyleSheetWrapped;
     cloneRules = cloneRulesWrapped;
     cloneRule = cloneRuleWrapped;
     cloneStyleRule = cloneStyleRuleWrapped;
+    makeStyle = makeStyleWrapped;
     cloneMediaRule = cloneMediaRuleWrapped;
   }
 
@@ -589,6 +653,21 @@ var FluidScale = (() => {
       );
     }
   };
+  var makeStyleAssertions = {
+    "should make the style": (state, args, result) => {
+      if (!result) return;
+      toEqualDefined(
+        result,
+        getStyleRuleByAbsIndex(
+          state.master.docClone,
+          state.absStyleRuleIndex - 1
+        ).style,
+        makeVitestMsg(state, {
+          absStyleIndex: state.absStyleRuleIndex - 1
+        })
+      );
+    }
+  };
   var cloneMediaRuleAssertions = {
     "should clone the media rule": (state, args, result) => {
       if (!result) return;
@@ -611,6 +690,7 @@ var FluidScale = (() => {
     cloneRules: cloneRulesAssertions,
     cloneRule: cloneRuleAssertions,
     cloneStyleRule: cloneStyleRuleAssertions,
+    makeStyle: makeStyleAssertions,
     cloneMediaRule: cloneMediaRuleAssertions
   };
   var CloneDocumentAssertionMaster = class extends dist_default {
@@ -640,6 +720,7 @@ var FluidScale = (() => {
           state.absStyleRuleIndex++;
         }
       });
+      this.makeStyle = this.wrapFn(makeStyle, "makeStyle");
       this.cloneMediaRule = this.wrapFn(cloneMediaRule, "cloneMediaRule", {
         post: (state, args, result) => {
           if (!result) return;
@@ -666,6 +747,7 @@ var FluidScale = (() => {
       cloneDocumentAssertionMaster.cloneRules,
       cloneDocumentAssertionMaster.cloneRule,
       cloneDocumentAssertionMaster.cloneStyleRule,
+      cloneDocumentAssertionMaster.makeStyle,
       cloneDocumentAssertionMaster.cloneMediaRule
     );
   }

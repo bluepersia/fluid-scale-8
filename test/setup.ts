@@ -2,6 +2,10 @@ import { Browser, chromium, Page } from "playwright";
 import path from "path";
 import { fileURLToPath } from "url";
 import { PlaywrightPage } from "./index.types";
+import { generateJSDOMDocument } from "../../FluidScaleB3/src/json-builder";
+import { wrapAll as wrapAllCloneDoc } from "./golden-master/gold-sight";
+
+wrapAllCloneDoc();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +21,11 @@ const realProjectsData: PlaywrightBlueprint[] = [
     addCss: ["css/global.css", "css/utils.css", "css/product-card.css"],
   },
 ];
+
+const JSDOMDocs = realProjectsData.map(({ htmlFilePath }, index) => {
+  const finalPath = path.resolve(__dirname, htmlFilePath, "index.html");
+  return { doc: generateJSDOMDocument([finalPath]), index };
+});
 
 async function initPlaywrightPages(): Promise<PlaywrightPage[]> {
   return await Promise.all(
@@ -68,4 +77,4 @@ async function teardownPlaywrightPages(
   }
 }
 
-export { initPlaywrightPages, teardownPlaywrightPages };
+export { initPlaywrightPages, teardownPlaywrightPages, JSDOMDocs };

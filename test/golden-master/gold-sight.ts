@@ -7,6 +7,7 @@ import {
   cloneRules,
   cloneRule,
   cloneStyleRule,
+  makeStyle,
   cloneMediaRule,
   wrap,
 } from "../../src/cloner";
@@ -124,6 +125,27 @@ const cloneStyleRuleAssertions: AssertionChain<
   },
 };
 
+const makeStyleAssertions: AssertionChain<
+  State,
+  CSSStyleRule,
+  Record<string, string>
+> = {
+  "should make the style": (state, args, result) => {
+    if (!result) return;
+
+    toEqualDefined(
+      result,
+      docCloneController.getStyleRuleByAbsIndex(
+        state.master!.docClone,
+        state.absStyleRuleIndex - 1
+      )!.style,
+      makeVitestMsg(state, {
+        absStyleIndex: state.absStyleRuleIndex - 1,
+      })
+    );
+  },
+};
+
 const cloneMediaRuleAssertions: AssertionChain<
   State,
   CSSMediaRule,
@@ -151,6 +173,7 @@ const defaultAssertions = {
   cloneRules: cloneRulesAssertions,
   cloneRule: cloneRuleAssertions,
   cloneStyleRule: cloneStyleRuleAssertions,
+  makeStyle: makeStyleAssertions,
   cloneMediaRule: cloneMediaRuleAssertions,
 };
 
@@ -202,6 +225,8 @@ class CloneDocumentAssertionMaster extends AssertionMaster<
     },
   });
 
+  makeStyle = this.wrapFn(makeStyle, "makeStyle");
+
   cloneMediaRule = this.wrapFn(cloneMediaRule, "cloneMediaRule", {
     post: (state, args, result) => {
       if (!result) return;
@@ -220,6 +245,7 @@ function wrapAll() {
     cloneDocumentAssertionMaster.cloneRules,
     cloneDocumentAssertionMaster.cloneRule,
     cloneDocumentAssertionMaster.cloneStyleRule,
+    cloneDocumentAssertionMaster.makeStyle,
     cloneDocumentAssertionMaster.cloneMediaRule
   );
 }
