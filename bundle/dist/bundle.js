@@ -107,8 +107,6 @@ var FluidScale = (() => {
         };
         if (processors?.post) {
           assertionData.postOp = (state, args2, result2) => {
-            const newState = { ...state };
-            assertionData.state = newState;
             processors.post(state, args2, result2);
           };
         }
@@ -134,6 +132,7 @@ var FluidScale = (() => {
       const queueIndexes = Array.from(assertionQueue.keys()).sort((a, b) => a - b);
       for (const queueIndex of queueIndexes) {
         const value = assertionQueue.get(queueIndex);
+        value.state = { ...value.state };
         if (value.postOp)
           value.postOp(this.state, value.args, value.result);
       }
@@ -721,12 +720,7 @@ var FluidScale = (() => {
           state.absStyleRuleIndex++;
         }
       });
-      this.makeStyle = this.wrapFn(makeStyle, "makeStyle", {
-        post: (state, args, result) => {
-          if (!result) return;
-          state.absStyleIndex++;
-        }
-      });
+      this.makeStyle = this.wrapFn(makeStyle, "makeStyle");
       this.cloneMediaRule = this.wrapFn(cloneMediaRule, "cloneMediaRule", {
         post: (state, args, result) => {
           if (!result) return;
@@ -740,7 +734,6 @@ var FluidScale = (() => {
         absRulesIndex: 0,
         absRuleIndex: 0,
         absStyleRuleIndex: 0,
-        absStyleIndex: 0,
         absMediaRuleIndex: 0
       };
     }

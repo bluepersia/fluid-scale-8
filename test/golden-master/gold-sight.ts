@@ -132,6 +132,7 @@ const makeStyleAssertions: AssertionChain<
 > = {
   "should make the style": (state, args, result) => {
     if (!result) return;
+
     toEqualDefined(
       result,
       docCloneController.getStyleRuleByAbsIndex(
