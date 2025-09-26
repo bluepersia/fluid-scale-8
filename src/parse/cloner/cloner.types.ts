@@ -20,7 +20,7 @@ type StyleRuleClone = RuleClone & {
 type MediaRuleClone = RuleClone & {
   type: 4;
   minWidth: number;
-  cssRules: RuleClone[];
+  cssRules: StyleRuleClone[];
 };
 
 export {

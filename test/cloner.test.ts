@@ -6,9 +6,9 @@ import {
 } from "./setup";
 import { PlaywrightPage } from "./index.types";
 import { collection } from "./golden-master/cloner/collection";
-import cloneDocumentAssertionMaster from "./golden-master/gold-sight";
+import cloneDocumentAssertionMaster from "./golden-master/cloner/gold-sight";
 import { AssertionBlueprint } from "gold-sight";
-import { cloneDocument, handleShorthand } from "../src/cloner";
+import { cloneDocument, handleShorthand } from "../src/parse/cloner/cloner";
 import {
   normalizeSelector,
   normalizeZero,

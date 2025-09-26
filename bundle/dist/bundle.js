@@ -219,7 +219,7 @@ var FluidScale = (() => {
     }
   }
 
-  // src/const.ts
+  // src/parse/cloner/const.ts
   var FLUID_PROPERTY_NAMES = /* @__PURE__ */ new Set([
     "font-size",
     "line-height",
@@ -432,7 +432,7 @@ var FluidScale = (() => {
     return result;
   }
 
-  // src/cloner.ts
+  // src/parse/cloner/cloner.ts
   var cloneDocument = (document) => {
     const docClone = {
       styleSheets: cloneStyleSheets(
@@ -495,7 +495,7 @@ var FluidScale = (() => {
       const property = rule.style[i];
       if (FLUID_PROPERTY_NAMES.has(property)) {
         if (SHORTHAND_PROPERTIES[property]) {
-          if (typeof process === void 0) continue;
+          if (typeof process === "undefined") continue;
           const shorthandValue = rule.style.getPropertyValue(property);
           if (!shorthandValue) continue;
           const shorthandStyle = handleShorthand(property, shorthandValue);
@@ -576,7 +576,7 @@ var FluidScale = (() => {
     });
   }
 
-  // test/golden-master/gold-sight.ts
+  // test/golden-master/cloner/gold-sight.ts
   var cloneDocumentAssertions = {
     "should clone the document": (state, args, result) => {
       toEqualDefined(

@@ -6,7 +6,7 @@ import {
   StyleSheetClone,
 } from "./cloner.types";
 import { FLUID_PROPERTY_NAMES, SHORTHAND_PROPERTIES } from "./const";
-import { splitBySpaces } from "./utils";
+import { splitBySpaces } from "../../utils";
 
 /** We convert the CSS document into a format that
  * can be tested outside of the browser */
@@ -122,7 +122,7 @@ let cloneMediaRule = (rule: CSSMediaRule): MediaRuleClone | null => {
     const mediaRuleClone: MediaRuleClone = {
       type: 4,
       minWidth: Number(match[1]),
-      cssRules: cloneRules(rule.cssRules),
+      cssRules: cloneRules(rule.cssRules) as StyleRuleClone[],
     };
     return mediaRuleClone;
   }
