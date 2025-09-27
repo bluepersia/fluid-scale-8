@@ -27,7 +27,7 @@ import {
 } from "./index.types";
 import { FluidData, FluidValue, FluidValueSingle } from "../index.types";
 
-function parseCSS(docClone: DocumentClone): CSSParseResult {
+let parseCSS = (docClone: DocumentClone): CSSParseResult => {
   const { breakpoints, globalBaselineWidth } = initDoc(docClone);
 
   const fluidData = parseStyleSheets(docClone.styleSheets, {
@@ -36,12 +36,14 @@ function parseCSS(docClone: DocumentClone): CSSParseResult {
   });
 
   return { breakpoints, fluidData };
-}
+};
 
-function initDoc(docClone: DocumentClone): {
+let initDoc = (
+  docClone: DocumentClone
+): {
   breakpoints: number[];
   globalBaselineWidth: number;
-} {
+} => {
   const breakpointsSet = new Set<number>();
   let globalBaselineWidth = 375;
 
@@ -57,16 +59,16 @@ function initDoc(docClone: DocumentClone): {
   }
 
   return { breakpoints: Array.from(breakpointsSet), globalBaselineWidth };
-}
+};
 
 function toMainCtx(ctx: any): ParseContext {
   return ctx as ParseContext;
 }
 
-function parseStyleSheets(
+let parseStyleSheets = (
   styleSheets: StyleSheetClone[],
   ctx: ParseStyleSheetsCtx
-) {
+) => {
   let fluidData: FluidData = {};
   let orderID = 0;
 
@@ -83,17 +85,20 @@ function parseStyleSheets(
     orderID = newOrderID;
   }
   return fluidData;
-}
+};
 
-function processStyleSheet(
+let processStyleSheet = (
   styleSheet: StyleSheetClone,
   ctx: ProcessStyleSheetCtx
-): DocStateResult {
+): DocStateResult => {
   const ruleBatches = batchStyleSheet(styleSheet, toMainCtx(ctx));
   return parseStyleSheet(ruleBatches, toMainCtx(ctx));
-}
+};
 
-function batchStyleSheet(styleSheet: StyleSheetClone, ctx: BatchStyleSheetCtx) {
+let batchStyleSheet = (
+  styleSheet: StyleSheetClone,
+  ctx: BatchStyleSheetCtx
+) => {
   let batchState: BatchState = {
     ruleBatches: [],
     currentRuleBatch: null,
@@ -103,13 +108,13 @@ function batchStyleSheet(styleSheet: StyleSheetClone, ctx: BatchStyleSheetCtx) {
     batchState = batchRule(rule, batchState, ctx.globalBaselineWidth);
   }
   return batchState.ruleBatches;
-}
+};
 
-function batchRule(
+let batchRule = (
   rule: RuleClone,
   batchState: BatchState,
   globalBaselineWidth: number
-): BatchState {
+): BatchState => {
   if (rule.type === 1) {
     return batchStyleRule(
       rule as StyleRuleClone,
@@ -120,13 +125,13 @@ function batchRule(
     return batchMediaRule(rule as MediaRuleClone, batchState);
   }
   return batchState;
-}
+};
 
-function batchStyleRule(
+let batchStyleRule = (
   styleRule: StyleRuleClone,
   batchState: BatchState,
   globalBaselineWidth: number
-): BatchState {
+): BatchState => {
   const newBatchState = {
     ...batchState,
     ruleBatches: [...batchState.ruleBatches],
@@ -150,12 +155,12 @@ function batchStyleRule(
   newBatchState.currentRuleBatch.rules.push(styleRule);
 
   return newBatchState;
-}
+};
 
-function batchMediaRule(
+let batchMediaRule = (
   mediaRule: MediaRuleClone,
   batchState: BatchState
-): BatchState {
+): BatchState => {
   const newBatchState = {
     ...batchState,
     ruleBatches: [...batchState.ruleBatches],
@@ -167,70 +172,81 @@ function batchMediaRule(
     isMediaQuery: true,
   });
   return newBatchState;
-}
+};
 
-function parseStyleSheet(ruleBatches: RuleBatch[], ctx: ParseContext) {
+let parseStyleSheet = (ruleBatches: RuleBatch[], ctx: ParseContext) => {
   let { fluidData, orderID } = ctx;
   for (const [batchIndex, ruleBatch] of ruleBatches.entries()) {
     const { newFluidData, newOrderID } = processRuleBatch(ruleBatch, {
       ...ctx,
+      ruleBatches,
       batchIndex,
+      fluidData,
+      orderID,
     });
     fluidData = newFluidData;
     orderID = newOrderID;
   }
   return { newFluidData: fluidData, newOrderID: orderID };
-}
+};
 
-function processRuleBatch(ruleBatch: RuleBatch, ctx: ProcessRuleBatchCtx) {
+let processRuleBatch = (batch: RuleBatch, ctx: ProcessRuleBatchCtx) => {
   let { fluidData, orderID } = ctx;
-  for (const rule of ruleBatch.rules) {
-    const { newFluidData, newOrderID } = processRule(rule, toMainCtx(ctx));
+  for (const rule of batch.rules) {
+    const { newFluidData, newOrderID } = processRule(
+      rule,
+      toMainCtx({ ...ctx, batch, fluidData, orderID })
+    );
     fluidData = newFluidData;
     orderID = newOrderID;
   }
   return { newFluidData: fluidData, newOrderID: orderID };
-}
+};
 
-function processRule(
+let processRule = (
   rule: StyleRuleClone,
   ctx: ProcessRuleCtx
-): DocStateResult {
+): DocStateResult => {
   let { orderID, fluidData } = ctx;
   const selectors = splitSelectors(rule.selectorText);
-  fluidData = processSelectors(selectors, rule, ctx);
+  fluidData = processSelectors(
+    selectors,
+    rule,
+    toMainCtx({ ...ctx, fluidData, orderID })
+  );
   orderID++;
 
   return { newOrderID: orderID, newFluidData: fluidData };
-}
+};
 
 function splitSelectors(selector: string) {
   return selector.split(",").map((selector) => selector.trim());
 }
 
-function processSelectors(
+let processSelectors = (
   selectors: string[],
   rule: StyleRuleClone,
   ctx: SelectorsCtx
-): FluidData {
+): FluidData => {
   let { fluidData } = ctx;
   for (const selector of selectors) {
-    fluidData = processSelector(selector, rule, ctx);
+    fluidData = processSelector(selector, rule, { ...ctx, fluidData });
   }
   return fluidData;
-}
+};
 
-function processSelector(
+let processSelector = (
   selector: string,
   rule: StyleRuleClone,
   ctx: SelectorCtx
-) {
+) => {
   let { fluidData } = ctx;
   for (const [property, minValue] of Object.entries(rule.style)) {
     fluidData = processProperty(
       property,
       toMainCtx({
         ...ctx,
+        fluidData,
         minValue,
         rule,
         selector,
@@ -241,9 +257,9 @@ function processSelector(
     );
   }
   return fluidData;
-}
+};
 
-function processProperty(property: string, ctx: PropertyCtx): FluidData {
+let processProperty = (property: string, ctx: PropertyCtx): FluidData => {
   const { batchIndex, ruleBatches } = ctx;
   let { fluidData } = ctx;
 
@@ -253,33 +269,44 @@ function processProperty(property: string, ctx: PropertyCtx): FluidData {
     nextIndex++
   ) {
     const nextBatch = ruleBatches[nextIndex];
-    fluidData = processNextBatch(nextBatch, toMainCtx({ ...ctx, property }));
+    const newFluidData = processNextBatch(
+      nextBatch,
+      toMainCtx({ ...ctx, property, fluidData })
+    );
+
+    if (fluidData !== newFluidData) {
+      return newFluidData;
+    }
   }
   return fluidData;
-}
+};
 
-function processNextBatch(
+let processNextBatch = (
   nextBatch: RuleBatch,
   ctx: ProcessNextBatchCtx
-): FluidData {
+): FluidData => {
   let { fluidData } = ctx;
 
   if (!nextBatch.isMediaQuery) return fluidData;
 
   for (const nextRule of nextBatch.rules) {
-    const newFluidData = processNextRule(nextRule, toMainCtx(ctx));
+    const newFluidData = processNextRule(
+      nextRule,
+      toMainCtx({ ...ctx, nextBatch })
+    );
 
-    if (newFluidData === fluidData) continue;
-    else break;
+    if (newFluidData !== fluidData) {
+      return newFluidData;
+    }
   }
 
   return fluidData;
-}
+};
 
-function processNextRule(
+let processNextRule = (
   nextRule: StyleRuleClone,
   ctx: ProcessNextRuleCtx
-): FluidData {
+): FluidData => {
   const { selector, property } = ctx;
 
   let { fluidData } = ctx;
@@ -294,12 +321,12 @@ function processNextRule(
   fluidData = processFluidRange(maxValue, toMainCtx(ctx));
 
   return fluidData;
-}
+};
 
-function processFluidRange(
+let processFluidRange = (
   maxValue: string,
   ctx: ProcessFluidRangeCtx
-): FluidData {
+): FluidData => {
   const { selector, isDynamic } = ctx;
 
   const baseSelector = isDynamic
@@ -310,21 +337,24 @@ function processFluidRange(
   const anchor = selectorParts[selectorParts.length - 1];
 
   return insertFluidRange(maxValue, anchor, toMainCtx(ctx));
-}
+};
 
-function insertFluidRange(
+let insertFluidRange = (
   maxValue: string,
   anchor: string,
   ctx: InsertFluidRangeCtx
-): FluidData {
+): FluidData => {
   const { property, orderID, selector, breakpoints } = ctx;
   const { minValue, batch, nextBatch } = ctx;
   let { fluidData } = ctx;
 
-  const anchorData = { ...(fluidData[anchor] || {}) };
-  const selectorData = { ...(anchorData[selector] || {}) };
-  const propertyData = {
-    ...(selectorData[property] || {
+  const newFluidData = { ...fluidData };
+  newFluidData[anchor] = { ...(newFluidData[anchor] || {}) };
+  newFluidData[anchor][selector] = {
+    ...(newFluidData[anchor][selector] || {}),
+  };
+  newFluidData[anchor][selector][property] = {
+    ...(newFluidData[anchor][selector][property] || {
       metaData: {
         orderID,
         property,
@@ -333,18 +363,20 @@ function insertFluidRange(
     }),
   };
 
-  propertyData.ranges = [...propertyData.ranges];
-  propertyData.ranges.push({
+  const newRanges = (newFluidData[anchor][selector][property].ranges = [
+    ...newFluidData[anchor][selector][property].ranges,
+  ]);
+  newRanges.push({
     minValue: parseFluidValue2D(minValue),
     maxValue: parseFluidValue2D(maxValue),
     minBpIndex: breakpoints.indexOf(batch.width),
     maxBpIndex: breakpoints.indexOf(nextBatch.width),
   });
 
-  return { ...fluidData, [anchor]: anchorData };
-}
+  return newFluidData;
+};
 
-function parseFluidValue2D(value: string): FluidValue[][] {
+let parseFluidValue2D = (value: string): FluidValue[][] => {
   let depth = 0;
   let currentValue = "";
   let values: FluidValue[][] = [];
@@ -361,15 +393,16 @@ function parseFluidValue2D(value: string): FluidValue[][] {
     }
   }
   values.push(parseFluidValue1D(currentValue));
-  return values;
-}
 
-function parseFluidValue1D(value: string): FluidValue[] {
+  return values;
+};
+
+let parseFluidValue1D = (value: string): FluidValue[] => {
   const values: string[] = splitBySpaces(value);
   return values.map(parseFluidValue);
-}
+};
 
-function parseFluidValue(strValue: string): FluidValue {
+let parseFluidValue = (strValue: string): FluidValue => {
   const value = parseFloat(strValue);
 
   // Match any alphabetic characters after the number
@@ -380,7 +413,7 @@ function parseFluidValue(strValue: string): FluidValue {
     value,
     unit,
   } as FluidValueSingle;
-}
+};
 
 function hasDynamicPseudo(selectorText: string): boolean {
   return /:(hover|focus|active|visited|disabled|checked|focus-visible|focus-within)/.test(
@@ -407,3 +440,98 @@ function stripDynamicPseudos(selectorText: string): string {
     )
     .trim();
 }
+
+/* -- TEST WRAPPING -- */
+
+function wrap(
+  parseCSSWrapped: (docClone: DocumentClone) => CSSParseResult,
+  initDocWrapped: (docClone: DocumentClone) => {
+    breakpoints: number[];
+    globalBaselineWidth: number;
+  },
+  parseStyleSheetsWrapped: (
+    styleSheets: StyleSheetClone[],
+    ctx: ParseStyleSheetsCtx
+  ) => FluidData,
+  processStyleSheetWrapped: (
+    styleSheet: StyleSheetClone,
+    ctx: ProcessStyleSheetCtx
+  ) => DocStateResult,
+  parseStyleSheetWrapped: (
+    ruleBatches: RuleBatch[],
+    ctx: ParseContext
+  ) => DocStateResult,
+  processRuleBatchWrapped: (
+    batch: RuleBatch,
+    ctx: ProcessRuleBatchCtx
+  ) => DocStateResult,
+  processRuleWrapped: (
+    rule: StyleRuleClone,
+    ctx: ProcessRuleCtx
+  ) => DocStateResult,
+  processSelectorsWrapped: (
+    selectors: string[],
+    rule: StyleRuleClone,
+    ctx: SelectorsCtx
+  ) => FluidData,
+  processSelectorWrapped: (
+    selector: string,
+    rule: StyleRuleClone,
+    ctx: SelectorCtx
+  ) => FluidData,
+  processPropertyWrapped: (property: string, ctx: PropertyCtx) => FluidData,
+  processNextBatchWrapped: (
+    nextBatch: RuleBatch,
+    ctx: ProcessNextBatchCtx
+  ) => FluidData,
+  processNextRuleWrapped: (
+    nextRule: StyleRuleClone,
+    ctx: ProcessNextRuleCtx
+  ) => FluidData,
+  processFluidRangeWrapped: (
+    maxValue: string,
+    ctx: ProcessFluidRangeCtx
+  ) => FluidData,
+  insertFluidRangeWrapped: (
+    maxValue: string,
+    anchor: string,
+    ctx: InsertFluidRangeCtx
+  ) => FluidData
+) {
+  parseCSS = parseCSSWrapped;
+  initDoc = initDocWrapped;
+  parseStyleSheets = parseStyleSheetsWrapped;
+  processStyleSheet = processStyleSheetWrapped;
+  parseStyleSheet = parseStyleSheetWrapped;
+  processRuleBatch = processRuleBatchWrapped;
+  processRule = processRuleWrapped;
+  processSelectors = processSelectorsWrapped;
+  processSelector = processSelectorWrapped;
+  processProperty = processPropertyWrapped;
+  processNextBatch = processNextBatchWrapped;
+  processNextRule = processNextRuleWrapped;
+  processFluidRange = processFluidRangeWrapped;
+  insertFluidRange = insertFluidRangeWrapped;
+}
+
+export {
+  wrap,
+  parseCSS,
+  initDoc,
+  parseStyleSheets,
+  processStyleSheet,
+  batchStyleSheet,
+  batchRule,
+  batchStyleRule,
+  batchMediaRule,
+  parseStyleSheet,
+  processRuleBatch,
+  processRule,
+  processSelectors,
+  processSelector,
+  processProperty,
+  processNextBatch,
+  processNextRule,
+  processFluidRange,
+  insertFluidRange,
+};

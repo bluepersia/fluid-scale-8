@@ -54,11 +54,17 @@ var FluidScale = (() => {
         verifiedAssertions.clear();
         console.groupCollapsed(`\u2705 ${this.globalKey} - \u2728${options?.masterIndex ?? this.state.master.index}`);
         const queueIndexes = Array.from(assertionQueue.keys()).sort((a, b) => options?.sorting === "desc" ? a - b : b - a);
+        let error;
         for (const queueIndex of queueIndexes) {
           const { name, result, args, state } = assertionQueue.get(queueIndex);
           const assertions = this.assertionChains[name];
           for (const [key, assertion] of Object.entries(assertions)) {
-            assertion(state, args, result);
+            try {
+              assertion(state, args, result);
+            } catch (e) {
+              error = e;
+              break;
+            }
             let count = verifiedAssertions.get(key) || 0;
             count++;
             verifiedAssertions.set(key, count);
@@ -69,6 +75,8 @@ var FluidScale = (() => {
         }
         console.groupEnd();
         this.reset();
+        if (error)
+          throw error;
       };
       this.assertionChains = assertionChains;
       this._globalKey = globalKey;
