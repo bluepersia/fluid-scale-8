@@ -1,25 +1,44 @@
+import { expect } from "vitest";
 import AssertionMaster, { AssertionChain } from "gold-sight";
 import * as docCloneController from "../masterControllers/docClone";
+import * as batchedDocController from "../masterControllers/batchedDoc";
 import {
   initDoc,
-  insertFluidRange,
   parseCSS,
-  parseStyleSheet,
   parseStyleSheets,
-  processFluidRange,
+  processStyleSheet,
+  wrap as parseWrap,
+  batchStyleSheet,
+  batchRule,
+  batchStyleRule,
+  batchMediaRule,
+} from "../../../src/parse/parse";
+import {
+  parseStyleSheet,
+  processRuleBatch,
+  processRule,
+  processSelectors,
+  processSelector,
+  processProperty,
   processNextBatch,
   processNextRule,
-  processProperty,
-  processRule,
-  processRuleBatch,
-  processSelector,
-  processSelectors,
-  processStyleSheet,
-  wrap,
-} from "../../../src/parse/parse";
-import { toEqualDefined, makeVitestMsg } from "../../utils";
+  wrap as patcherWrap,
+} from "../../../src/parse/patcher/index";
+import {
+  processFluidRange,
+  insertFluidRange,
+  wrap as fluidRangeWrap,
+} from "../../../src/parse/patcher/fluidRange";
+
+import {
+  toEqualDefined,
+  makeVitestMsg,
+  toMatchObjectDefined,
+} from "../../utils";
 import { ParseMaster } from "./master.types";
 import {
+  BatchState,
+  BatchStyleSheetCtx,
   CSSParseResult,
   DocStateResult,
   FluidData,
@@ -39,20 +58,26 @@ import {
 } from "../../../src/parse/index.types";
 import {
   DocumentClone,
+  MediaRuleClone,
+  RuleClone,
   StyleRuleClone,
   StyleSheetClone,
 } from "../../../src/parse/cloner/cloner.types";
-import { expect } from "vitest";
 
 type State = {
   master?: ParseMaster;
+  sheetIndex: number;
+  absStyleRuleIndex: number;
+  absMediaRuleIndex: number;
 };
 
 const parseCSSAssertions: AssertionChain<State, DocumentClone, CSSParseResult> =
   {
     "should parse the document": (state, args, result) => {
-      expect(result.fluidData).toEqual(state.master?.fluidData);
-      expect(result.breakpoints).toEqual(state.master?.breakpoints);
+      const msg = makeVitestMsg(state, "parseCSS");
+
+      expect(result.fluidData, msg).toEqual(state.master?.fluidData);
+      expect(result.breakpoints, msg).toEqual(state.master?.breakpoints);
     },
   };
 
@@ -62,20 +87,12 @@ const initDocAssertions: AssertionChain<
   { breakpoints: number[]; globalBaselineWidth: number }
 > = {
   "should init the document": (state, args, result) => {
-    expect(result.breakpoints).toEqual(state.master?.breakpoints);
-    expect(result.globalBaselineWidth).toEqual(
+    const msg = makeVitestMsg(state, "initDoc");
+
+    expect(result.breakpoints, msg).toEqual(state.master?.breakpoints);
+    expect(result.globalBaselineWidth, msg).toEqual(
       state.master?.globalBaselineWidth
     );
-  },
-};
-
-const parseStyleSheetsAssertions: AssertionChain<
-  State,
-  [StyleSheetClone[], ParseStyleSheetsCtx],
-  DocStateResult
-> = {
-  "should parse the style sheets": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result);
   },
 };
 
@@ -85,7 +102,145 @@ const processStyleSheetAssertions: AssertionChain<
   DocStateResult
 > = {
   "should process the style sheet": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result.newFluidData);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result.newFluidData,
+      makeVitestMsg(state, "fluidData")
+    );
+  },
+};
+
+const batchStyleSheetAssertions: AssertionChain<
+  State,
+  [StyleSheetClone, BatchStyleSheetCtx],
+  RuleBatch[]
+> = {
+  "should batch the style sheet": (state, args, result) => {
+    toEqualDefined(
+      result,
+      state.master!.batchedDoc.styleSheets[state.sheetIndex - 1].batches,
+      makeVitestMsg(state, {
+        sheetIndex: state.sheetIndex - 1,
+      })
+    );
+  },
+};
+
+function getLastBatch(batchState: BatchState): RuleBatch {
+  return batchState.ruleBatches[batchState.ruleBatches.length - 1];
+}
+
+function getLastRule(batch: RuleBatch): StyleRuleClone {
+  return batch.rules[batch.rules.length - 1];
+}
+
+const batchRuleAssertions: AssertionChain<
+  State,
+  [RuleClone, BatchState, number],
+  BatchState
+> = {
+  "should batch the style rule": (state, args, result) => {
+    const type = args[0].type;
+    const lastBatch = getLastBatch(result);
+    const lastRule = getLastRule(lastBatch);
+    if (type === 1) {
+      toEqualDefined(
+        lastRule,
+        docCloneController.getStyleRuleByAbsIndex(
+          state.master!.input,
+          state.absStyleRuleIndex
+        ),
+        makeVitestMsg(state, {
+          absStyleRuleIndex: state.absStyleRuleIndex,
+        })
+      );
+
+      toEqualDefined(
+        lastRule,
+        result.currentRuleBatch!.rules[
+          result.currentRuleBatch!.rules.length - 1
+        ]
+      );
+    }
+  },
+  "should batch the media rule": (state, args, result) => {
+    const type = args[0].type;
+    const lastBatch = result.ruleBatches[result.ruleBatches.length - 1];
+
+    if (type === 4) {
+      if (args[1] === result) return;
+      toEqualDefined(
+        lastBatch,
+        batchedDocController.getMediaRuleByAbsIndex(
+          state.master!.batchedDoc,
+          state.absMediaRuleIndex
+        ),
+        makeVitestMsg(state, {
+          absMediaRuleIndex: state.absMediaRuleIndex,
+        })
+      );
+
+      expect(result.currentRuleBatch).toBeNull();
+    }
+  },
+};
+
+const batchStyleRuleAssertions: AssertionChain<
+  State,
+  [StyleRuleClone, BatchState, number],
+  BatchState
+> = {
+  "should batch the style rule": (state, args, result) => {
+    const lastBatch = getLastBatch(result);
+    const lastRule = getLastRule(lastBatch);
+    toEqualDefined(
+      lastRule,
+      docCloneController.getStyleRuleByAbsIndex(
+        state.master!.input,
+        state.absStyleRuleIndex
+      ),
+      makeVitestMsg(state, {
+        absStyleRuleIndex: state.absStyleRuleIndex,
+      })
+    );
+  },
+};
+
+const batchMediaRuleAssertions: AssertionChain<
+  State,
+  [MediaRuleClone, BatchState],
+  BatchState
+> = {
+  "should batch the media rule": (state, args, result) => {
+    const lastBatch = getLastBatch(result);
+
+    if (args[1] === result) return;
+    toEqualDefined(
+      lastBatch,
+      batchedDocController.getMediaRuleByAbsIndex(
+        state.master!.batchedDoc,
+        state.absMediaRuleIndex
+      ),
+      makeVitestMsg(state, {
+        absMediaRuleIndex: state.absMediaRuleIndex,
+      })
+    );
+
+    expect(result.currentRuleBatch).toBeNull();
+  },
+};
+
+const parseStyleSheetsAssertions: AssertionChain<
+  State,
+  [StyleSheetClone[], ParseStyleSheetsCtx],
+  DocStateResult
+> = {
+  "should parse the style sheets": (state, args, result) => {
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -95,7 +250,11 @@ const parseStyleSheetAssertions: AssertionChain<
   DocStateResult
 > = {
   "should parse the style sheet": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result.newFluidData);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result.newFluidData,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -105,7 +264,11 @@ const processRuleBatchAssertions: AssertionChain<
   DocStateResult
 > = {
   "should process the rule batch": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result.newFluidData);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result.newFluidData,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -115,7 +278,11 @@ const processRuleAssertions: AssertionChain<
   DocStateResult
 > = {
   "should process the rule": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result.newFluidData);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result.newFluidData,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -125,7 +292,11 @@ const processSelectorsAssertions: AssertionChain<
   FluidData
 > = {
   "should process the selectors": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -135,7 +306,11 @@ const processSelectorAssertions: AssertionChain<
   FluidData
 > = {
   "should process the selector": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -145,7 +320,11 @@ const processNextBatchAssertions: AssertionChain<
   FluidData
 > = {
   "should process the next batch": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -155,7 +334,11 @@ const processPropertyAssertions: AssertionChain<
   FluidData
 > = {
   "should process the property": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -165,7 +348,11 @@ const processNextRuleAssertions: AssertionChain<
   FluidData
 > = {
   "should process the next rule": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -175,7 +362,11 @@ const processFluidRangeAssertions: AssertionChain<
   FluidData
 > = {
   "should process the fluid range": (state, args, result) => {
-    expect(state.master!.fluidData).toMatchObject(result);
+    toMatchObjectDefined(
+      state.master!.fluidData,
+      result,
+      makeVitestMsg(state, "fluidData")
+    );
   },
 };
 
@@ -192,8 +383,12 @@ const insertFluidRangeAssertions: AssertionChain<
 const defaultAssertions = {
   parseCSS: parseCSSAssertions,
   initDoc: initDocAssertions,
-  parseStyleSheets: parseStyleSheetsAssertions,
   processStyleSheet: processStyleSheetAssertions,
+  batchStyleSheet: batchStyleSheetAssertions,
+  batchRule: batchRuleAssertions,
+  batchStyleRule: batchStyleRuleAssertions,
+  batchMediaRule: batchMediaRuleAssertions,
+  parseStyleSheets: parseStyleSheetsAssertions,
   parseStyleSheet: parseStyleSheetAssertions,
   processRuleBatch: processRuleBatchAssertions,
   processRule: processRuleAssertions,
@@ -212,16 +407,41 @@ class ParseCSSAssertionMaster extends AssertionMaster<State, ParseMaster> {
   }
 
   newState(): State {
-    return {};
+    return {
+      sheetIndex: 0,
+      absStyleRuleIndex: 0,
+      absMediaRuleIndex: 0,
+    };
   }
 
   parseCSS = this.wrapTopFn(parseCSS, "parseCSS");
 
   initDoc = this.wrapFn(initDoc, "initDoc");
 
-  parseStyleSheets = this.wrapFn(parseStyleSheets, "parseStyleSheets");
+  processStyleSheet = this.wrapFn(processStyleSheet, "processStyleSheet", {
+    post: (state) => {
+      state.sheetIndex++;
+    },
+  });
 
-  processStyleSheet = this.wrapFn(processStyleSheet, "processStyleSheet");
+  batchStyleSheet = this.wrapFn(batchStyleSheet, "batchStyleSheet");
+
+  batchRule = this.wrapFn(batchRule, "batchRule");
+
+  batchStyleRule = this.wrapFn(batchStyleRule, "batchStyleRule", {
+    post: (state) => {
+      state.absStyleRuleIndex++;
+    },
+  });
+
+  batchMediaRule = this.wrapFn(batchMediaRule, "batchMediaRule", {
+    post: (state, args, result) => {
+      if (args[1] === result) return;
+      state.absMediaRuleIndex++;
+    },
+  });
+
+  parseStyleSheets = this.wrapFn(parseStyleSheets, "parseStyleSheets");
 
   parseStyleSheet = this.wrapFn(parseStyleSheet, "parseStyleSheet");
 
@@ -247,11 +467,18 @@ class ParseCSSAssertionMaster extends AssertionMaster<State, ParseMaster> {
 const parseCSSAssertionMaster = new ParseCSSAssertionMaster();
 
 function wrapAll() {
-  wrap(
+  parseWrap(
     parseCSSAssertionMaster.parseCSS,
     parseCSSAssertionMaster.initDoc,
-    parseCSSAssertionMaster.parseStyleSheets,
     parseCSSAssertionMaster.processStyleSheet,
+    parseCSSAssertionMaster.batchStyleSheet,
+    parseCSSAssertionMaster.batchRule,
+    parseCSSAssertionMaster.batchStyleRule,
+    parseCSSAssertionMaster.batchMediaRule,
+    parseCSSAssertionMaster.parseStyleSheets
+  );
+
+  patcherWrap(
     parseCSSAssertionMaster.parseStyleSheet,
     parseCSSAssertionMaster.processRuleBatch,
     parseCSSAssertionMaster.processRule,
@@ -259,7 +486,10 @@ function wrapAll() {
     parseCSSAssertionMaster.processSelector,
     parseCSSAssertionMaster.processProperty,
     parseCSSAssertionMaster.processNextBatch,
-    parseCSSAssertionMaster.processNextRule,
+    parseCSSAssertionMaster.processNextRule
+  );
+
+  fluidRangeWrap(
     parseCSSAssertionMaster.processFluidRange,
     parseCSSAssertionMaster.insertFluidRange
   );

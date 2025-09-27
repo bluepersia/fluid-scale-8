@@ -12,7 +12,7 @@ describe("parseCSS", () => {
   test.each(collection)("should parse the document", async (master) => {
     parseCSSAssertionMaster.master = master;
 
-    parseCSS(master.imput);
+    parseCSS(master.input);
 
     parseCSSAssertionMaster.assertQueue();
   });
