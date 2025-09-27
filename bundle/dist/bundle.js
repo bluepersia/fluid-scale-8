@@ -54,11 +54,17 @@ var FluidScale = (() => {
         verifiedAssertions.clear();
         console.groupCollapsed(`\u2705 ${this.globalKey} - \u2728${options?.masterIndex ?? this.state.master.index}`);
         const queueIndexes = Array.from(assertionQueue.keys()).sort((a, b) => options?.sorting === "desc" ? a - b : b - a);
+        let error;
         for (const queueIndex of queueIndexes) {
           const { name, result, args, state } = assertionQueue.get(queueIndex);
           const assertions = this.assertionChains[name];
           for (const [key, assertion] of Object.entries(assertions)) {
-            assertion(state, args, result);
+            try {
+              assertion(state, args, result);
+            } catch (e) {
+              error = e;
+              break;
+            }
             let count = verifiedAssertions.get(key) || 0;
             count++;
             verifiedAssertions.set(key, count);
@@ -69,6 +75,8 @@ var FluidScale = (() => {
         }
         console.groupEnd();
         this.reset();
+        if (error)
+          throw error;
       };
       this.assertionChains = assertionChains;
       this._globalKey = globalKey;
@@ -219,7 +227,7 @@ var FluidScale = (() => {
     }
   }
 
-  // src/const.ts
+  // src/parse/cloner/const.ts
   var FLUID_PROPERTY_NAMES = /* @__PURE__ */ new Set([
     "font-size",
     "line-height",
@@ -432,7 +440,7 @@ var FluidScale = (() => {
     return result;
   }
 
-  // src/cloner.ts
+  // src/parse/cloner/cloner.ts
   var cloneDocument = (document) => {
     const docClone = {
       styleSheets: cloneStyleSheets(
@@ -495,7 +503,7 @@ var FluidScale = (() => {
       const property = rule.style[i];
       if (FLUID_PROPERTY_NAMES.has(property)) {
         if (SHORTHAND_PROPERTIES[property]) {
-          if (typeof process === void 0) continue;
+          if (typeof process === "undefined") continue;
           const shorthandValue = rule.style.getPropertyValue(property);
           if (!shorthandValue) continue;
           const shorthandStyle = handleShorthand(property, shorthandValue);
@@ -576,7 +584,7 @@ var FluidScale = (() => {
     });
   }
 
-  // test/golden-master/gold-sight.ts
+  // test/golden-master/cloner/gold-sight.ts
   var cloneDocumentAssertions = {
     "should clone the document": (state, args, result) => {
       toEqualDefined(

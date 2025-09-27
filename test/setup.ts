@@ -3,9 +3,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { PlaywrightPage } from "./index.types";
 import { generateJSDOMDocument } from "../../FluidScaleB3/src/json-builder";
-import { wrapAll as wrapAllCloneDoc } from "./golden-master/gold-sight";
-
+import { wrapAll as wrapAllCloneDoc } from "./golden-master/cloner/gold-sight";
+import { wrapAll as wrapAllParseCSS } from "./golden-master/parse/gold-sight";
 wrapAllCloneDoc();
+wrapAllParseCSS();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

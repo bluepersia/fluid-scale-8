@@ -1,5 +1,5 @@
 import AssertionMaster, { AssertionChain } from "gold-sight";
-import * as docCloneController from "./masterControllers/docClone";
+import * as docCloneController from "../masterControllers/docClone";
 import {
   cloneDocument,
   cloneStyleSheets,
@@ -10,16 +10,16 @@ import {
   makeStyle,
   cloneMediaRule,
   wrap,
-} from "../../src/cloner";
+} from "../../../src/parse/cloner/cloner";
 import {
   DocumentClone,
   MediaRuleClone,
   RuleClone,
   StyleRuleClone,
   StyleSheetClone,
-} from "../../src/cloner.types";
-import { toEqualDefined, makeVitestMsg } from "../utils";
-import { ClonerMaster } from "./cloner/master.types";
+} from "../../../src/parse/cloner/cloner.types";
+import { toEqualDefined, makeVitestMsg } from "../../utils";
+import { ClonerMaster } from "./master.types";
 
 type State = {
   sheetIndex: number;
